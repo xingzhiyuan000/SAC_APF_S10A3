@@ -45,7 +45,7 @@ best_reward = -1e10
 STATE_DIM = 10              # 输入状态维度: 7个当前关节驱动量+位置误差+姿态误差+是否成功
 ACTION_DIM = 3              # 输出动作维度: 3排斥力权重大小
 
-num_candidates = 10        # 每步探索次数
+NUM_EXPLORE = 10            # 每步探索次数
 
 
 REWARD_BUFFER = []          # 每局奖励数组方便绘图
@@ -88,10 +88,7 @@ buffer = ReplayBuffer(STATE_DIM, ACTION_DIM, config.BUFFER_SIZE, device)
 best_eposide_reward = -1e10  # 单局最大奖励
 best_avg_step_reward = -1e10  # 平均每步奖励
 
-q456_action_arr = np.array([[-10, 10],[-10, 10],[-10, 10]])
-q4_action_arr = np.array([-10, 10])
-q5_action_arr = np.array([-10, 10])
-q6_action_arr = np.array([-10, 10])
+
 success_count = 0  # 成功次数
 for episode_i in range(NUM_EPISODE):
 
@@ -121,10 +118,14 @@ for episode_i in range(NUM_EPISODE):
     alpha_sum = 0                       # alpha
     k_step=1
 
-    mu = (q456_action_arr[:,1]-q456_action_arr[:,1])/2;
-    sigma = np.full(ACTION_DIM,5.0); #初始大范围探索
-    alpha = 0.5; #均值更新步长
-    beta = 0.95; #方差收缩率（衰减系数）
+    # mu = (q456_action_arr[:,1]-q456_action_arr[:,1])/2;
+    # sigma = np.full(ACTION_DIM,5.0); #初始大范围探索
+    # alpha = 0.5; #均值更新步长
+    # beta = 0.95; #方差收缩率（衰减系数）
+    q456_action_arr = np.array([[-10, 10], [-10, 10], [-10, 10]])
+    q4_action_arr = np.array([-10, 0])
+    q5_action_arr = np.array([-10, 10])
+    q6_action_arr = np.array([-10, 10])
     for step_i in range(NUM_STEP):
 
         epsilon = np.interp(x=episode_i * NUM_STEP + step_i, xp=[0, EPSILON_DECAY], fp=[EPSILON_START, EPSILON_END])
@@ -132,19 +133,19 @@ for episode_i in range(NUM_EPISODE):
 
         if random_sample <= epsilon:
             best_explor_reward = -1e10  # 探索最大奖励
-            for explorer_i in range(num_candidates):
+            for explorer_i in range(NUM_EXPLORE):
                 # ε-贪心探索策略
                 action = np.zeros(3)
                 # 均匀随机探索
                 # action=np.random.uniform(low=-params.max_action_3, high=params.max_action_3, size=ACTION_DIM)
 
-                # action[0] = np.random.uniform(low=q4_action_arr[0],high=q4_action_arr[1])
-                # action[1] = np.random.uniform(low=q5_action_arr[0],high=q5_action_arr[1])
-                # action[2] = np.random.uniform(low=q6_action_arr[0],high=q6_action_arr[1])
+                action[0] = np.random.uniform(low=q4_action_arr[0],high=q4_action_arr[1])
+                action[1] = np.random.uniform(low=q5_action_arr[0],high=q5_action_arr[1])
+                action[2] = np.random.uniform(low=q6_action_arr[0],high=q6_action_arr[1])
 
                 # 高斯策略收缩探索
-                action = np.random.normal(loc=mu, scale=sigma)
-                np.clip(action, q456_action_arr[:,0], q456_action_arr[:,1])
+                # action = np.random.normal(loc=mu, scale=sigma)
+                # np.clip(action, q456_action_arr[:,0], q456_action_arr[:,1])
 
                 # 环境交互
                 next_state, reward, done, info = Env.step(action, episode_i, step_i, False)
@@ -154,8 +155,8 @@ for episode_i in range(NUM_EPISODE):
                 q_ltr = agent.q1(torch.FloatTensor(state).to(device), torch.FloatTensor(action).to(device))
                 q_ltr = q_ltr.detach().cpu().numpy()
 
-                # r_ = 0.6 * reward + 0.4 * q_ltr
-                r_ = reward
+                r_ = 0.6 * reward + 0.4 * q_ltr
+                # r_ = reward
 
 
                 STEP_REWARD_BUFFER.append(reward)
@@ -166,10 +167,26 @@ for episode_i in range(NUM_EPISODE):
                     best_action = action
 
                     # 探索范围更改
-                    mu = mu + alpha * (action - mu);
-                    sigma *= beta;  # 方差变小，区间逐渐逼近点点
-                else:
-                    sigma = np.minimum(5.0, sigma * 1.02)
+                    # if action[0]>(q4_action_arr[1]-q4_action_arr[0])/2:
+                    #     q4_action_arr[0]=action[0]-(q4_action_arr[1]-action[0])
+                    # else:
+                    #     q4_action_arr[1] = action[0] + (action[0]-q4_action_arr[0])
+                    #
+                    # if action[1] > (q5_action_arr[1] - q5_action_arr[0]) / 2:
+                    #     q5_action_arr[0] = action[1] - (q5_action_arr[1] - action[1])
+                    # else:
+                    #     q5_action_arr[1] = action[1] + (action[1] - q5_action_arr[0])
+                    #
+                    # if action[2] > (q6_action_arr[1] - q6_action_arr[0]) / 2:
+                    #     q6_action_arr[0] = action[2] - (q6_action_arr[1] - action[2])
+                    # else:
+                    #     q6_action_arr[1] = action[2] + (action[2] - q6_action_arr[0])
+
+
+                #     mu = mu + alpha * (action - mu);
+                #     sigma *= beta;  # 方差变小，区间逐渐逼近点点
+                # else:
+                #     sigma = np.minimum(5.0, sigma * 1.02)
 
         else:
             best_action = agent.select_action(state, evaluate=False)

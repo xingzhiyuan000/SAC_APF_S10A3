@@ -1,5 +1,4 @@
 import numpy as np
-from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 
 from ENV.mpParams import mpParams

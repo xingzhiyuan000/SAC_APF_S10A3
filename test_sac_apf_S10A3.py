@@ -1,6 +1,5 @@
 import torch
 import os
-import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -30,7 +29,7 @@ data_dir = current_path+"/data/"
 data_path = os.path.join(data_dir, "Q_deg.xlsx")
 
 model=current_path+"/models/"
-actor_path= model + "sac_apf_actor_A3_20260609151626.pth"
+actor_path= model + "sac_apf_actor_A3_20260613115655.pth"
 
 # 实例化Agent
 agent=SACAgent(
