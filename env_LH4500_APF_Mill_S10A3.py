@@ -4,7 +4,6 @@ from scipy.spatial.distance import euclidean
 
 from ENV.mpParams import mpParams
 from ENV.Collision_LH4500 import is_Collision
-from ENV.Collision_Self_LH4500 import is_Self_Collision
 import ENV.FK_LH4500 as fk
 import ENV.Rewards as rewards
 import ENV.Tools as tools
@@ -68,7 +67,7 @@ class ENV_APF:
         return state_start_norm
 
     # ===== step =====
-    def step(self, a, eposide_i, step_i, ref_traj=None, update_state=True):
+    def step(self, a, eposide_i, step_i, update_state=True):
 
         k_rep_q4 = a[0]   # q4更新权重
         k_rep_q5 = a[1]   # q5更新权重
@@ -188,17 +187,7 @@ class ENV_APF:
         w_r_step = 1                 #
         w_r_dtw = 10                 #DTW时间动态规划权重
 
-        # DTW回合结束奖励
-        # if done:
-        # if ref_traj is not None and step_i%2==0:
-        #     actual_seq = np.array(self.actual_traj)  # 形状为 (N, 7)
-        #
-        #     # 使用fastdtw计算整体宏观相似度
-        #     dtw_dist, _ = fastdtw(actual_seq[:,3].reshape(-1, 1), ref_traj[:,3].reshape(-1, 1), dist=euclidean)
-        #     # dtw_dist, _ = fastdtw(ref_traj, ref_traj, dist=euclidean)
-        #     res_r_dtw = w_r_dtw * np.exp(-0.01 * dtw_dist)  # 使用负指数将距离转化为 (0, 100] 的大奖励
-        # else:
-        #     res_r_dtw = 0
+
 
         res_r_dtw = 0
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 from torch.optim import Adam
-from SAC_2019_APF_Action3_V3.network_sac_apf import GaussianPolicy, QNetwork
+from network_sac_apf import GaussianPolicy, QNetwork
 import config
 
 

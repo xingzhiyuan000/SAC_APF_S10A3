@@ -5,13 +5,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import time
+import sys
+sys.path.append("..") # 把上一级目录添加到 Python 的模块搜索路径中
 
 from ENV.mpParams import mpParams
 import ENV.Tools as tools
 import ENV.Evaluation as eva
 
 import config
-from SAC_2019_APF_Action3.agent_sac_apf_S10A3 import SACAgent
+from agent_sac_apf_S10A3 import SACAgent
 from env_LH4500_APF_Mill_S10A3 import ENV_APF
 
 
@@ -46,11 +48,6 @@ agent=SACAgent(
     alpha_lr=config.ALPHA_LR
 )
 
-# actor = agent.actor(obs_dim=STATE_DIM,
-#                     act_dim=ACTION_DIM,
-#                     hidden_dim=config.HIDDEN_DIM,
-#                     log_std_min=config.LOG_STD_MIN,
-#                     log_std_max=config.LOG_STD_MAX).to(device)
 actor = agent.actor.to(device)
 
 actor.load_state_dict(torch.load(actor_path))       # 载入trained模型

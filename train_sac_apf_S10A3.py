@@ -7,32 +7,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
+import sys
 
+
+sys.path.append("..") # 把上一级目录添加到 Python 的模块搜索路径中
 
 from ENV.mpParams import mpParams
 import ENV.Tools as tools
 import ENV.FK_LH4500 as fk
 
 import config
-from SAC_2019_APF_Action3_V3.agent_sac_apf_S10A3 import SACAgent
+from agent_sac_apf_S10A3 import SACAgent
 from env_LH4500_APF_Mill_S10A3 import ENV_APF
-from SAC_2019_APF_Action3_V3.replay_buffer import ReplayBuffer
+from replay_buffer import ReplayBuffer
 
 
 current_path=os.path.dirname(os.path.realpath(__file__))
 model = current_path+"/models/"
 image = current_path+"/images/"
-paths = current_path + "/paths/"
 data = current_path+"/data/"
 timestamp=time.strftime("%Y%m%d%H%M%S")
 params = mpParams() # 通用参数
 
-# 参考关节序列
-traj_deg = pd.read_excel(paths+'myMethod_关节变化趋势60带关节56优化-解析.xlsx', header=None).values
-cols_to_rad = [1, 2, 4, 5, 6] # 保留第1列和第4列（索引0和3）不变
-traj_rad = traj_deg.copy()
-traj_rad[:, cols_to_rad] = np.deg2rad(traj_rad[:, cols_to_rad])
-traj_norm = tools.normalize_q(traj_rad, params)
 
 device=torch.device(config.DEVICE)  # 训练设备
 Env = ENV_APF(params)               # 场景环境
@@ -49,7 +45,7 @@ best_reward = -1e10
 STATE_DIM = 10              # 输入状态维度: 7个当前关节驱动量+位置误差+姿态误差+是否成功
 ACTION_DIM = 3              # 输出动作维度: 3排斥力权重大小
 
-num_candidates = 10
+num_candidates = 10        # 每步探索次数
 
 
 REWARD_BUFFER = []          # 每局奖励数组方便绘图
@@ -92,8 +88,8 @@ buffer = ReplayBuffer(STATE_DIM, ACTION_DIM, config.BUFFER_SIZE, device)
 best_eposide_reward = -1e10  # 单局最大奖励
 best_avg_step_reward = -1e10  # 平均每步奖励
 
-# q4_action_arr = np.array([-10, 0])
-q4_action_arr = np.array([-10, 0])
+q456_action_arr = np.array([[-10, 10],[-10, 10],[-10, 10]])
+q4_action_arr = np.array([-10, 10])
 q5_action_arr = np.array([-10, 10])
 q6_action_arr = np.array([-10, 10])
 success_count = 0  # 成功次数
@@ -125,66 +121,42 @@ for episode_i in range(NUM_EPISODE):
     alpha_sum = 0                       # alpha
     k_step=1
 
+    mu = (q456_action_arr[:,1]-q456_action_arr[:,1])/2;
+    sigma = np.full(ACTION_DIM,5.0); #初始大范围探索
+    alpha = 0.5; #均值更新步长
+    beta = 0.95; #方差收缩率（衰减系数）
     for step_i in range(NUM_STEP):
-
-        # 【有目的搜索】-q5
-        # q_c_rad = tools.denormalize_q(state[:7], params)        # 当前关节构型_rad
-        # T08_current = fk.fkine_LH4500(q_c_rad, "08", True)
-        # TCP_p = T08_current[:3, 3]  # 当前位置向量
-        # TCP_a = T08_current[:3, 2]  # 当前姿态矩末端执行器的z轴方向
-        # q5_explore_dir = np.dot(TCP_a, [0, 0, 1])
-        #
-        # if q5_explore_dir<0:
-        #     q5_action_arr = np.array([0, 10])
-        # else:
-        #     q5_action_arr = np.array([-10, 0])
-        #
-        # # 【有目的搜索】-q6
-        # # y=y0-(m/l)x0  (l,m,n)是TCP
-        # # 1. 提取对应的分量
-        # x0, y0 = TCP_p[0], TCP_p[1]
-        # dx, dy = TCP_a[0], TCP_a[1]
-        #
-        # # 3. 计算平面直线方程的参数 y = kx + b
-        # # 注意：加入防除零保护，防止机械臂刚好垂直于 X 轴运动 (dx=0)
-        # if dx != 0:
-        #     y_at_x_zero = y0 - (dy / dx) * x0 # 当 x = 0 时 y的值
-        #
-        # y_at_x_zero=y_at_x_zero-399.5  # 转换到磨机坐标系下
-        # if y_at_x_zero>0:
-        #     q6_action_arr = np.array([-10, 0])
-        # else:
-        #     q6_action_arr = np.array([0, 10])
 
         epsilon = np.interp(x=episode_i * NUM_STEP + step_i, xp=[0, EPSILON_DECAY], fp=[EPSILON_START, EPSILON_END])
         random_sample = random.random()
 
         if random_sample <= epsilon:
             best_explor_reward = -1e10  # 探索最大奖励
-            candidates = []
             for explorer_i in range(num_candidates):
                 # ε-贪心探索策略
                 action = np.zeros(3)
-                # 随机探索
+                # 均匀随机探索
                 # action=np.random.uniform(low=-params.max_action_3, high=params.max_action_3, size=ACTION_DIM)
 
-                action[0] = np.random.uniform(low=q4_action_arr[0],high=q4_action_arr[1])
-                action[1] = np.random.uniform(low=q5_action_arr[0],high=q5_action_arr[1])
-                action[2] = np.random.uniform(low=q6_action_arr[0],high=q6_action_arr[1])
+                # action[0] = np.random.uniform(low=q4_action_arr[0],high=q4_action_arr[1])
+                # action[1] = np.random.uniform(low=q5_action_arr[0],high=q5_action_arr[1])
+                # action[2] = np.random.uniform(low=q6_action_arr[0],high=q6_action_arr[1])
+
+                # 高斯策略收缩探索
+                action = np.random.normal(loc=mu, scale=sigma)
+                np.clip(action, q456_action_arr[:,0], q456_action_arr[:,1])
 
                 # 环境交互
-                next_state, reward, done, info = Env.step(action, episode_i, step_i, traj_norm, False)
-                # buffer.add(state, action, reward, next_state, float(done))
+                next_state, reward, done, info = Env.step(action, episode_i, step_i, False)
+                buffer.add(state, action, reward, next_state, float(done))
 
                 # 找最优action;  q_ltr长远收益, 环境返回的是眼前收益reward
                 q_ltr = agent.q1(torch.FloatTensor(state).to(device), torch.FloatTensor(action).to(device))
                 q_ltr = q_ltr.detach().cpu().numpy()
 
-                r_ = 0.6 * reward + 0.4 * q_ltr
-                # r_ = q_ltr
+                # r_ = 0.6 * reward + 0.4 * q_ltr
+                r_ = reward
 
-                # r_= 0.7*(reward/20) + 0.3*(q_ltr/500)
-                # r_= k_step*reward + (1-k_step)*q_ltr
 
                 STEP_REWARD_BUFFER.append(reward)
                 Q_REWARD_BUFFER.append(q_ltr)
@@ -193,35 +165,19 @@ for episode_i in range(NUM_EPISODE):
                     best_explor_reward=r_
                     best_action = action
 
-                # candidates.append({
-                #     "action": action.copy(),
-                #     "reward": reward,
-                #     "q_ltr": q_ltr,
-                #     "r_": r_,
-                #     "next_state": next_state,
-                #     "done": done
-                # })
-
-            # 排序并指数衰减分布抽样
-            # candidates.sort(key=lambda x: x["r_"], reverse=True)
-            # N = len(candidates)
-            # lam = 1  # 衰减系数,越大越偏向前面的元素 1 2
-            # prob = np.exp(-lam * np.arange(N))
-            # prob /= prob.sum()
-            # idx = np.random.choice(np.arange(N), p=prob)
-            # selected = candidates[idx]
-            # best_action = selected["action"]
+                    # 探索范围更改
+                    mu = mu + alpha * (action - mu);
+                    sigma *= beta;  # 方差变小，区间逐渐逼近点点
+                else:
+                    sigma = np.minimum(5.0, sigma * 1.02)
 
         else:
             best_action = agent.select_action(state, evaluate=False)
 
 
         # 最后真正更新环境状态
-        next_state, reward, done, info = Env.step(best_action, episode_i, step_i, traj_norm, True)
+        next_state, reward, done, info = Env.step(best_action, episode_i, step_i, True)
         buffer.add(state, best_action, reward, next_state, float(done))
-
-        # 放入经验池
-        # buffer.add(state, action, reward, next_state, float(done))
 
         state = next_state
         episode_reward += reward     # 每局累积奖励
@@ -244,9 +200,6 @@ for episode_i in range(NUM_EPISODE):
         batch = buffer.sample(config.BATCH_SIZE)
         if buffer.size>=config.BATCH_SIZE:
             info = agent.update(batch)
-            # ACTOR_LOSS.append(info["actor_loss"])
-            # CRTIC_LOSS.append(info["q1 loss"])
-            # ALPHA_LOSS.append(info["alpha_loss"])
             actor_loss_sum += info["actor_loss"]
             critic_loss_sum += info["q1 loss"]
             alpha_loss_sum += info["alpha_loss"]
@@ -289,8 +242,7 @@ for episode_i in range(NUM_EPISODE):
 
     print(
         f"{success_star}回合:{episode_i + 1}, 【回合奖励】:{episode_reward:.2f}, "
-        # f"r_progress:{progress_reward_sum:.2f}, "
-        f"DTW奖惩/步:{dtw_reward_sum / (step_i + 1):.2f}, "
+        # f"DTW奖惩/步:{dtw_reward_sum / (step_i + 1):.2f}, "
         f"位置奖惩/步:{tcp2target_reward_sum / (step_i + 1):.2f}, "
         f"姿态奖惩/步:{orientation_reward_sum / (step_i + 1):.2f}, "
         f"碰撞奖惩/步:{collision_reward_sum / (step_i + 1):.2f}, "
@@ -361,7 +313,6 @@ if PLOT_REWARD:
     axs[2].set_title("alpha_loss")
     axs[2].legend()
     axs[2].grid(True)
-
     # ===== 下下图：ALPHA =====
     axs[3].plot(np.arange(len(ALPHA_BUFFER)), ALPHA_BUFFER, color='purple', alpha=0.5, label='alpha')
     axs[3].plot(np.arange(len(ALPHA_BUFFER)), gaussian_filter1d(ALPHA_BUFFER, sigma=5), color='red', linewidth=2)
@@ -371,6 +322,7 @@ if PLOT_REWARD:
     axs[3].grid(True)
 
     plt.tight_layout()  # 自动调整子图间距
+    plt.savefig(image + f"loss-ddpg-apf-A3-{timestamp}.png", format='png')
 
     # ================= 奖励绘图 =================
     fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
@@ -391,12 +343,8 @@ if PLOT_REWARD:
     axs[1].grid(True)
 
     plt.tight_layout()  # 自动调整子图间距
+    plt.savefig(image + f"step-Q-ddpg-apf-A3-{timestamp}.png", format='png')
     plt.show()
-
-
-
-
-
 
 
 
