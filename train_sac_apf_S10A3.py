@@ -33,13 +33,13 @@ params = mpParams() # 通用参数
 device=torch.device(config.DEVICE)  # 训练设备
 Env = ENV_APF(params)               # 场景环境
 
-PLOT_REWARD=True                #是否绘图
-NUM_EPISODE = 500               #玩多少局
-NUM_STEP = params.num_step      #每局最多步数
+PLOT_REWARD=True                    #是否绘图
+NUM_EPISODE = params.num_episode    #玩多少局 500
+NUM_STEP = params.num_step          #每局最多步数
 
-EPSILON_START = 1.0
-EPSILON_END = 0.02
-EPSILON_DECAY = NUM_EPISODE*NUM_STEP * 0.6  # 探索衰减
+EPSILON_START = params.EPSILON_START
+EPSILON_END = params.EPSILON_END
+EPSILON_DECAY = NUM_EPISODE*NUM_STEP * params.EPSILON_DECAY_RATE  # 探索衰减
 best_reward = -1e10
 
 STATE_DIM = 10              # 输入状态维度: 7个当前关节驱动量+位置误差+姿态误差+是否成功
@@ -126,12 +126,14 @@ for episode_i in range(NUM_EPISODE):
     q4_action_arr = np.array([-10, 0])
     q5_action_arr = np.array([-10, 10])
     q6_action_arr = np.array([-10, 10])
+    random_count = 0  # 随机动作次数
     for step_i in range(NUM_STEP):
 
         epsilon = np.interp(x=episode_i * NUM_STEP + step_i, xp=[0, EPSILON_DECAY], fp=[EPSILON_START, EPSILON_END])
         random_sample = random.random()
 
         if random_sample <= epsilon:
+            random_count += 1
             best_explor_reward = -1e10  # 探索最大奖励
             for explorer_i in range(NUM_EXPLORE):
                 # ε-贪心探索策略
@@ -167,20 +169,20 @@ for episode_i in range(NUM_EPISODE):
                     best_action = action
 
                     # 探索范围更改
-                    # if action[0]>(q4_action_arr[1]-q4_action_arr[0])/2:
-                    #     q4_action_arr[0]=action[0]-(q4_action_arr[1]-action[0])
-                    # else:
-                    #     q4_action_arr[1] = action[0] + (action[0]-q4_action_arr[0])
-                    #
-                    # if action[1] > (q5_action_arr[1] - q5_action_arr[0]) / 2:
-                    #     q5_action_arr[0] = action[1] - (q5_action_arr[1] - action[1])
-                    # else:
-                    #     q5_action_arr[1] = action[1] + (action[1] - q5_action_arr[0])
-                    #
-                    # if action[2] > (q6_action_arr[1] - q6_action_arr[0]) / 2:
-                    #     q6_action_arr[0] = action[2] - (q6_action_arr[1] - action[2])
-                    # else:
-                    #     q6_action_arr[1] = action[2] + (action[2] - q6_action_arr[0])
+                    if action[0]>(q4_action_arr[1]+q4_action_arr[0])/2:
+                        q4_action_arr[0]=action[0]-(q4_action_arr[1]-action[0])
+                    else:
+                        q4_action_arr[1] = action[0] + (action[0]-q4_action_arr[0])
+
+                    if action[1] > (q5_action_arr[1] + q5_action_arr[0]) / 2:
+                        q5_action_arr[0] = action[1] - (q5_action_arr[1] - action[1])
+                    else:
+                        q5_action_arr[1] = action[1] + (action[1] - q5_action_arr[0])
+
+                    if action[2] > (q6_action_arr[1] + q6_action_arr[0]) / 2:
+                        q6_action_arr[0] = action[2] - (q6_action_arr[1] - action[2])
+                    else:
+                        q6_action_arr[1] = action[2] + (action[2] - q6_action_arr[0])
 
 
                 #     mu = mu + alpha * (action - mu);
@@ -279,9 +281,15 @@ for episode_i in range(NUM_EPISODE):
     # 平均每步奖励最大
     if avg_step_reward > best_reward:
         best_reward = avg_step_reward
-        torch.save(agent.actor.state_dict(), model + f"sac_apf_actor_A3_{timestamp}.pth")
+
+    if  success_flag and random_count==0:
+        torch.save(agent.actor.state_dict(), model + f"sac_apf_actor_S10A1_{timestamp}.pth")
         print(f"...saving best model reward:{round(best_reward, 2)}")
-    print(f"--------Episode{episode_i+1}", 'reward %.2f' % episode_reward,'avg_step_best_reward %.2f' % best_reward, "--------")
+
+    print(
+        f"--------随机探索次数: {random_count},"
+        f"训练成功率: {round(success_count/NUM_EPISODE, 2)},"
+        f"平均每步最大奖励: {best_reward:.2f},--------")
 
     if collision_count == 0 and success_flag == 1:
         success_count += 1
@@ -305,7 +313,7 @@ if PLOT_REWARD:
     plt.title('Reward')
     plt.xlabel('Episode')
     plt.ylabel('Episode Reward')
-    plt.savefig(image + f"Reward-ddpg-apf-A3-{timestamp}.png", format='png')
+    plt.savefig(image + f"Reward-sac-apf-S10A3-{timestamp}.png", format='png')
 
     # ================= Loss 绘图 =================
     fig, axs = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
@@ -339,7 +347,7 @@ if PLOT_REWARD:
     axs[3].grid(True)
 
     plt.tight_layout()  # 自动调整子图间距
-    plt.savefig(image + f"loss-ddpg-apf-A3-{timestamp}.png", format='png')
+    plt.savefig(image + f"loss-sac-apf-S10A3-{timestamp}.png", format='png')
 
     # ================= 奖励绘图 =================
     fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
@@ -360,7 +368,7 @@ if PLOT_REWARD:
     axs[1].grid(True)
 
     plt.tight_layout()  # 自动调整子图间距
-    plt.savefig(image + f"step-Q-ddpg-apf-A3-{timestamp}.png", format='png')
+    plt.savefig(image + f"step-Q-sac-apf-S10A3-{timestamp}.png", format='png')
     plt.show()
 
 

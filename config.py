@@ -6,9 +6,9 @@ DEVICE="cuda" if __import__("torch").cuda.is_available() else "cpu"
 GAMMA=0.99  # 0.99
 TAU=0.01
 
-ACTOR_LR = 3e-4
-CRITIC_LR = 3e-3
-ALPHA_LR = 3e-4
+ACTOR_LR = 1e-4     # 3e-4
+CRITIC_LR = 1e-3    # 3e-4
+ALPHA_LR = 1e-4     # 3e-4
 
 HIDDEN_DIM = 256
 BATCH_SIZE = 512
