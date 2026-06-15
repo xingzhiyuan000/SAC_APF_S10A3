@@ -137,7 +137,7 @@ for episode_i in range(NUM_EPISODE):
             best_explor_reward = -1e10  # 探索最大奖励
             for explorer_i in range(NUM_EXPLORE):
                 # ε-贪心探索策略
-                action = np.zeros(3)
+                action = np.zeros(ACTION_DIM)
                 # 均匀随机探索
                 # action=np.random.uniform(low=-params.max_action_3, high=params.max_action_3, size=ACTION_DIM)
 
@@ -283,7 +283,7 @@ for episode_i in range(NUM_EPISODE):
         best_reward = avg_step_reward
 
     if  success_flag and random_count==0:
-        torch.save(agent.actor.state_dict(), model + f"sac_apf_actor_S10A1_{timestamp}.pth")
+        torch.save(agent.actor.state_dict(), model + f"sac_apf_actor_S10A3_{timestamp}.pth")
         print(f"...saving best model reward:{round(best_reward, 2)}")
 
     print(
